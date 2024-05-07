@@ -10,6 +10,11 @@ func main() {
 	if env != "" {
 		port = env
 	}
+	storeService := GetStoreService()
+	if storeService != nil {
+		defer storeService.store.db.Close()
+	}
+
 	ListenApi(port)
 
 }

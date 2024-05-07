@@ -49,15 +49,19 @@ func openDB() *sqlx.DB {
 	dbfile := DB_FILE
 	envFile := os.Getenv("TODO_DBFILE")
 	if len(envFile) > 0 {
-		fileInfo, err := os.Stat(envFile)
+		dbfile = envFile
+		path := filepath.Dir(dbfile)
+		pathInfo, err := os.Stat(path)
 		if err != nil {
 			fmt.Println(err)
 			return nil
 		}
-		if fileInfo.IsDir() {
-			dbfile = filepath.Join(envFile, DB_NAME)
-		} else {
-			dbfile = envFile
+		if !pathInfo.IsDir() {
+			err := os.MkdirAll(path, 0644)
+			if err != nil {
+				fmt.Println(err)
+				return nil
+			}
 		}
 	}
 	fmt.Println("Database file", dbfile)
@@ -175,7 +179,6 @@ func (ss *StoreService) RescheduleTask(id string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("Get task from db", task)
 	if task.Repeat == "" {
 		ss.DeleteTask(id)
 	} else {
@@ -183,7 +186,6 @@ func (ss *StoreService) RescheduleTask(id string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println("Next date is going to be", nextDate)
 		res := ss.store.db.MustExec("UPDATE scheduler SET date = $1 WHERE id = $2", nextDate, id)
 		num, err := res.RowsAffected()
 		if err != nil {
@@ -199,13 +201,12 @@ func (ss *StoreService) RescheduleTask(id string) error {
 }
 
 func (ss *StoreService) DeleteTask(id string) error {
-	fmt.Println("Trying to delete task id", id)
 	res := ss.store.db.MustExec("DELETE FROM scheduler WHERE id = $1", id)
 	num, err := res.RowsAffected()
 	if err != nil {
 		return err
 	}
-	fmt.Println("rows affected for id", id)
+	fmt.Println("rows affected for id", id, "=", num)
 	if num == 0 {
 		return fmt.Errorf("no row was deleted for id %s", id)
 	}
@@ -215,7 +216,6 @@ func (ss *StoreService) DeleteTask(id string) error {
 func (ss *StoreService) GetAllTasks(limit int) (*[]Task, error) {
 	tasks := []Task{}
 	err := ss.store.db.Select(&tasks, "SELECT * FROM scheduler LIMIT $1", limit)
-	fmt.Println("All Tasks:", tasks)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +228,6 @@ func (ss *StoreService) SearchByDate(date time.Time, limit int) (*[]Task, error)
 	tasks := []Task{}
 	fmt.Println("Tasks by date for date:", dateForsearch)
 	err := ss.store.db.Select(&tasks, "SELECT * FROM scheduler WHERE date = $1 LIMIT $2", dateForsearch, limit)
-	fmt.Println("Tasks by date:", tasks)
 	if err != nil {
 		fmt.Println("Tasks by date error:", err.Error())
 		return nil, err
@@ -241,7 +240,6 @@ func (ss *StoreService) SearchByString(search string, limit int) (*[]Task, error
 	tasks := []Task{}
 	err := ss.store.db.Select(&tasks, "SELECT * FROM scheduler WHERE title LIKE :search OR comment LIKE '$1' ORDER BY date LIMIT $2",
 		"%"+search+"%", limit)
-	fmt.Println("Tasks by string:", tasks)
 	if err != nil {
 		fmt.Println("Tasks by string error:", err.Error())
 		return nil, err

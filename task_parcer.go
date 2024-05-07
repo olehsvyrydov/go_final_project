@@ -18,12 +18,6 @@ func NextDate(today time.Time, date string, repeat string) (string, error) {
 		return "", err
 	}
 
-	// if repeat == "" {
-	// 	if startDate.Before(today) {
-	// 		return today.Format(DATE_SCHEDULE_FORMAT), nil
-	// 	}
-	// 	return startDate.Format(DATE_SCHEDULE_FORMAT), nil
-	// }
 	rule := strings.SplitN(repeat, " ", 2)
 
 	switch rule[0] {
@@ -36,7 +30,7 @@ func NextDate(today time.Time, date string, repeat string) (string, error) {
 		if len(rule) != 2 {
 			return "", fmt.Errorf("rule for week should be defined")
 		}
-		return ruleForWeek(today, rule[1])
+		return ruleForWeek(today, startDate, rule[1])
 	case "m":
 		if len(rule) != 2 {
 			return "", fmt.Errorf("rule for month should be defined")
@@ -60,10 +54,7 @@ func ruleForDay(today time.Time, date time.Time, rule string) (string, error) {
 	}
 
 	for {
-		// fmt.Println("LOOP before today = ", today.Format(DATE_SCHEDULE_FORMAT), "date =", date.Format(DATE_SCHEDULE_FORMAT), "rule =", rule)
 		date = date.AddDate(0, 0, countDays)
-		// fmt.Println("LOOP after  today = ", today.Format(DATE_SCHEDULE_FORMAT), "date =", date.Format(DATE_SCHEDULE_FORMAT), "rule =", rule)
-		// fmt.Println("Is date > today", date.After(today))
 		if date.After(today) && date != today {
 			break
 		}
@@ -83,25 +74,30 @@ func ruleForYear(today, date time.Time) (string, error) {
 	return date.Format(DATE_SCHEDULE_FORMAT), nil
 }
 
-func ruleForWeek(today time.Time, rule string) (string, error) {
+func ruleForWeek(today time.Time, date time.Time, rule string) (string, error) {
 	days, err := stringToIntArray(rule)
 	if err != nil {
 		return "", err
 	}
 	sort.Ints(days)
-
-	weekday := int(today.Weekday())
+	if date.Before(today) {
+		date = today
+	}
+	weekday := int(date.Weekday())
 	for _, day := range days {
 		if day < 1 || day > 7 {
 			return "", fmt.Errorf("wrong format day for week. It shouls be from 1 till 7")
 		}
-		if day > weekday {
-			date := today.AddDate(0, 0, day-weekday)
-			return date.Format(dateFormat), nil
+
+		if day <= weekday {
+			continue
 		}
+
+		date := date.AddDate(0, 0, day-weekday)
+		return date.Format(dateFormat), nil
 	}
 
-	date := today.AddDate(0, 0, 7-weekday+days[0])
+	date = date.AddDate(0, 0, 7-weekday+days[0])
 	return date.Format(DATE_SCHEDULE_FORMAT), nil
 }
 
@@ -141,10 +137,8 @@ func ruleForMonth(today time.Time, date time.Time, rule string) (string, error) 
 func stringToIntArray(input string) ([]int, error) {
 	strArray := strings.Split(input, ",")
 
-	// Create an integer slice to store the parsed integers
 	intArray := make([]int, len(strArray))
 
-	// Parse each substring into an integer and store it in the integer slice
 	for i, str := range strArray {
 		num, err := strconv.Atoi(str)
 		if err != nil {
