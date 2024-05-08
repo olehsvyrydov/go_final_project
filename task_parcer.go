@@ -109,11 +109,12 @@ func ruleForMonth(today time.Time, date time.Time, rule string) (string, error) 
 		return "", err
 	}
 
-	var startDate time.Time
-	if today.After(date) {
-		startDate = today
-	} else {
-		startDate = date
+	if date.Before(today) {
+		date = today
+	}
+
+	if len(days) == 0 {
+		return "", fmt.Errorf("days should be specified")
 	}
 
 	if len(rules) == 2 {
@@ -121,17 +122,28 @@ func ruleForMonth(today time.Time, date time.Time, rule string) (string, error) 
 		if err != nil {
 			return "", err
 		}
-		for contains(months, int(startDate.Month())) {
-			startDate = startDate.AddDate(0, 1, 0)
+
+		sort.Ints(months)
+		if months[0] < 0 {
+			return "", fmt.Errorf("month cannot have negative value")
 		}
+		num := find(int(date.Month()), months)
+
+		nextMonthDate := getFirstDayOfYear(date).AddDate(0, num-1, 0)
+		d, err := findNextDay(nextMonthDate, days)
+		if err != nil {
+			return "", err
+		}
+		nd := d.Format(DATE_SCHEDULE_FORMAT)
+		return nd, nil
 	}
 
-	nextDate, err := findNextDate(days, startDate)
+	d, err := findNextDay(date, days)
 	if err != nil {
 		return "", err
 	}
-
-	return nextDate.Format(DATE_SCHEDULE_FORMAT), nil
+	nd := d.Format(DATE_SCHEDULE_FORMAT)
+	return nd, nil
 }
 
 func stringToIntArray(input string) ([]int, error) {
@@ -150,58 +162,78 @@ func stringToIntArray(input string) ([]int, error) {
 	return intArray, nil
 }
 
-func contains(s []int, e int) bool {
-	for _, a := range s {
-		if a == e {
-			return true
-		}
-	}
-	return false
-}
+func findNextDay(date time.Time, days []int) (time.Time, error) {
 
-func findNextDate(days []int, date time.Time) (time.Time, error) {
-	if len(days) == 0 {
-		return date, nil
+	newDays, err := transformForDate(date, &days)
+	if err != nil {
+		return date, err
 	}
-	monthDays := getLastDayOfMonth(date).Day()
-	fmt.Println("last Day of Month is ", monthDays, " days is ", days, " month is ", date.Month().String())
-	var d int
+
+	nextDay := adjustingFind(date.Day(), newDays)
+
+	if nextDay < 0 {
+		return getFirstdayOfNextMonth(date).AddDate(0, 0, newDays[0]-1), nil
+	}
+
 	for {
-		date = date.AddDate(0, 0, 1)
-
-		for _, v := range days {
-			fmt.Println("v = ", v)
-			if v > monthDays && v <= 31 {
-				dateNext := date
-				for {
-					dateNext = dateNext.AddDate(0, 1, 0)
-					monthDaysNext := getLastDayOfMonth(dateNext).Day()
-					if v == monthDaysNext {
-						return TodayDate(dateNext), nil
-					}
-				}
-			}
-			if v > monthDays || v < -monthDays {
-				return date, fmt.Errorf("incorrect date number. v is %d, monthDays is %d", v, monthDays)
-			}
-			d = v
-			if d < 0 {
-				d = monthDays + 1 + v
-			}
-			if d == date.Day() {
-				return date, nil
-			}
+		nextDate := getFirstdayOfMonth(date).AddDate(0, 0, nextDay-1)
+		if nextDate.Day() == nextDay {
+			return nextDate, nil
 		}
+		date = date.AddDate(0, 1, 0)
 	}
-}
-
-func getLastDayOfMonth(date time.Time) time.Time {
-	nextMonth := date.AddDate(0, 1, 0)
-	firstDayOfNextMonth := time.Date(nextMonth.Year(), nextMonth.Month(), 1, 0, 0, 0, 0, time.UTC)
-	lastDay := firstDayOfNextMonth.Add(-time.Hour)
-	return lastDay
 }
 
 func TodayDate(date time.Time) time.Time {
 	return time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
+}
+
+func transformForDate(date time.Time, days *[]int) ([]int, error) {
+	nextDay := date.AddDate(0, 0, 1)
+	var newDays []int
+	for _, d := range *days {
+		if d < -2 || d > 31 {
+			return nil, fmt.Errorf("incorrect date format")
+		}
+		if d < 0 {
+			firstDayOfNextMonth := getFirstdayOfNextMonth(nextDay)
+			d = firstDayOfNextMonth.AddDate(0, 0, d).Day()
+			newDays = append(newDays, d)
+		} else {
+			newDays = append(newDays, d)
+		}
+	}
+	sort.Ints(newDays)
+	return newDays, nil
+}
+
+func getFirstdayOfNextMonth(date time.Time) time.Time {
+	nextDate := date.AddDate(0, 1, 0)
+	return getFirstdayOfMonth(nextDate)
+}
+
+func getFirstdayOfMonth(date time.Time) time.Time {
+	return time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, time.UTC)
+}
+
+func getFirstDayOfYear(date time.Time) time.Time {
+	return time.Date(date.Year(), 1, 1, 0, 0, 0, 0, time.UTC)
+}
+
+func adjustingFind(num int, nums []int) int {
+	for _, v := range nums {
+		if num < v {
+			return v
+		}
+	}
+	return -1
+}
+
+func find(num int, nums []int) int {
+	for _, v := range nums {
+		if num <= v {
+			return v
+		}
+	}
+	return -1
 }
