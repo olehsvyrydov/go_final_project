@@ -8,6 +8,10 @@ import (
 	"time"
 )
 
+const (
+	Limit = 50
+)
+
 type Task struct {
 	Id      string `json:"id,omitempty"`
 	Date    string `json:"date,omitempty"`
@@ -19,7 +23,6 @@ type Task struct {
 type Empty struct{}
 
 func handleNextDate(res http.ResponseWriter, req *http.Request) {
-	fmt.Println("Next date handler running")
 	if req.Method == http.MethodGet {
 		now := req.FormValue("now")
 		if now == "" {
@@ -38,7 +41,7 @@ func handleNextDate(res http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		nowDate, err := time.Parse(dateFormat, now)
+		nowDate, err := time.Parse(DateScheduleFormat, now)
 		if err != nil {
 			sendError(res, err.Error(), http.StatusBadRequest)
 		}
@@ -54,14 +57,12 @@ func handleNextDate(res http.ResponseWriter, req *http.Request) {
 }
 
 func handleTask(res http.ResponseWriter, req *http.Request) {
-	fmt.Println("Task handler running")
-
 	// add tasks
 	if req.Method == http.MethodPost {
 		postTaskHandler(res, req)
 	}
 
-	// edit tasks
+	// get tasks
 	if req.Method == http.MethodGet {
 		getTaskHandler(res, req)
 	}
@@ -71,7 +72,7 @@ func handleTask(res http.ResponseWriter, req *http.Request) {
 		putTaskHandler(res, req)
 	}
 
-	// edit tasks
+	// delete tasks
 	if req.Method == http.MethodDelete {
 		deleteTaskHandler(res, req)
 	}
@@ -101,12 +102,12 @@ func postTaskHandler(res http.ResponseWriter, req *http.Request) {
 	}
 
 	today := TodayDate(time.Now())
-	todayStr := today.Format(DATE_SCHEDULE_FORMAT)
+	todayStr := today.Format(DateScheduleFormat)
 
 	if task.Date == "" {
 		nextDate = todayStr
 	} else {
-		taskDate, err := time.Parse(DATE_SCHEDULE_FORMAT, task.Date)
+		taskDate, err := time.Parse(DateScheduleFormat, task.Date)
 		if err != nil {
 			sendError(res, "wrong format for date", http.StatusBadRequest)
 			return
@@ -129,13 +130,11 @@ func postTaskHandler(res http.ResponseWriter, req *http.Request) {
 			}
 		}
 	}
-
 	storeService := GetStoreService()
 	if storeService == nil {
 		sendError(res, "cannot get instance of store service", http.StatusInternalServerError)
 		return
 	}
-
 	id, err := storeService.AddTask(nextDate, task.Title, task.Comment, task.Repeat)
 	if err != nil {
 		sendError(res, err.Error(), http.StatusInternalServerError)
@@ -160,7 +159,6 @@ func getTaskHandler(res http.ResponseWriter, req *http.Request) {
 		sendError(res, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
 	if task == nil {
 		sendOk(res, Task{})
 		return
@@ -217,13 +215,11 @@ func deleteTaskHandler(res http.ResponseWriter, req *http.Request) {
 		sendError(res, "parameter 'id' must be specified", http.StatusBadRequest)
 		return
 	}
-	fmt.Println("Getting store service", id)
 	storService := GetStoreService()
 	if storService == nil {
 		sendError(res, "cannot get instance of store service", http.StatusInternalServerError)
 		return
 	}
-	fmt.Println("Delete task running for id", id)
 	err := storService.DeleteTask(id)
 	if err != nil {
 		sendError(res, err.Error(), http.StatusInternalServerError)
@@ -233,7 +229,6 @@ func deleteTaskHandler(res http.ResponseWriter, req *http.Request) {
 }
 
 func doneTaskHandler(res http.ResponseWriter, req *http.Request) {
-	fmt.Println("Done task handler running")
 	if req.Method == http.MethodPost {
 		id := req.FormValue("id")
 		if id == "" {
@@ -255,7 +250,6 @@ func doneTaskHandler(res http.ResponseWriter, req *http.Request) {
 }
 
 func handleTasks(res http.ResponseWriter, req *http.Request) {
-	fmt.Println("Tasks handler running")
 	if req.Method == http.MethodGet {
 		search := req.FormValue("search")
 		storeService := GetStoreService()
@@ -263,7 +257,7 @@ func handleTasks(res http.ResponseWriter, req *http.Request) {
 			sendError(res, "cannot get instance of store service", http.StatusInternalServerError)
 			return
 		}
-		tasks, err := storeService.GetTasks(search, LIMIT)
+		tasks, err := storeService.GetTasks(search, Limit)
 		if err != nil {
 			sendError(res, err.Error(), http.StatusInternalServerError)
 			return
@@ -284,6 +278,7 @@ func ListenApi(port string) {
 	mux.HandleFunc("/api/task", handleTask)
 	mux.HandleFunc("/api/tasks", handleTasks)
 	mux.HandleFunc("/api/task/done", doneTaskHandler)
+	fmt.Println("Start listening")
 	err := http.ListenAndServe(fmt.Sprintf(":%s", port), mux)
 	if err != nil {
 		panic(err)

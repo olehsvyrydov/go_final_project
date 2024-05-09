@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"os"
 )
 
 func main() {
+	fmt.Println("Go application started")
 	port := "7540"
 	env := os.Getenv("TODO_PORT")
 	if env != "" {
@@ -14,6 +16,8 @@ func main() {
 	if storeService != nil {
 		defer storeService.store.db.Close()
 	}
+
+	fmt.Println("Application running with port", port)
 
 	ListenApi(port)
 

@@ -8,13 +8,17 @@ import (
 	"time"
 )
 
+const (
+	DateScheduleFormat = "20060102"
+)
+
 func NextDate(today time.Time, date string, repeat string) (string, error) {
 	var startDate time.Time
 	var err error
 
 	if date == "" {
 		startDate = today
-	} else if startDate, err = time.Parse(DATE_SCHEDULE_FORMAT, date); err != nil {
+	} else if startDate, err = time.Parse(DateScheduleFormat, date); err != nil {
 		return "", err
 	}
 
@@ -60,8 +64,7 @@ func ruleForDay(today time.Time, date time.Time, rule string) (string, error) {
 		}
 	}
 
-	fmt.Println("today =", today.Format(DATE_SCHEDULE_FORMAT), "date =", date.Format(DATE_SCHEDULE_FORMAT), "rule =", rule)
-	return date.Format(DATE_SCHEDULE_FORMAT), nil
+	return date.Format(DateScheduleFormat), nil
 }
 
 func ruleForYear(today, date time.Time) (string, error) {
@@ -71,7 +74,7 @@ func ruleForYear(today, date time.Time) (string, error) {
 			break
 		}
 	}
-	return date.Format(DATE_SCHEDULE_FORMAT), nil
+	return date.Format(DateScheduleFormat), nil
 }
 
 func ruleForWeek(today time.Time, date time.Time, rule string) (string, error) {
@@ -94,11 +97,11 @@ func ruleForWeek(today time.Time, date time.Time, rule string) (string, error) {
 		}
 
 		date := date.AddDate(0, 0, day-weekday)
-		return date.Format(dateFormat), nil
+		return date.Format(DateScheduleFormat), nil
 	}
 
 	date = date.AddDate(0, 0, 7-weekday+days[0])
-	return date.Format(DATE_SCHEDULE_FORMAT), nil
+	return date.Format(DateScheduleFormat), nil
 }
 
 func ruleForMonth(today time.Time, date time.Time, rule string) (string, error) {
@@ -134,7 +137,7 @@ func ruleForMonth(today time.Time, date time.Time, rule string) (string, error) 
 		if err != nil {
 			return "", err
 		}
-		nd := d.Format(DATE_SCHEDULE_FORMAT)
+		nd := d.Format(DateScheduleFormat)
 		return nd, nil
 	}
 
@@ -142,7 +145,7 @@ func ruleForMonth(today time.Time, date time.Time, rule string) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	nd := d.Format(DATE_SCHEDULE_FORMAT)
+	nd := d.Format(DateScheduleFormat)
 	return nd, nil
 }
 

@@ -10,26 +10,16 @@ COPY *.go ./
 
 COPY web ./web
 
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o /final
-
-ENV TODO_PORT=7540
-
-ENV TODO_DBFILE=./sheduler.db
-
-ENTRYPOINT [ "/final" ]
+RUN CGO_ENABLED=1 GOOS=linux go build -a -ldflags '-extldflags "-static"' -o /final .
 
 
 
-# FROM alpine:3.19
+FROM alpine:3.19
 
-# WORKDIR /usr/src/goapp
+WORKDIR /usr/src/goapp
 
-# COPY --from=builder /final ./
+COPY --from=builder /final ./
 
-# ENV TODO_PORT=7540
+EXPOSE 7540
 
-# ENV TODO_DBFILE=./sheduler.db
-
-# EXPOSE 7540
-
-# ENTRYPOINT [ "sh", "./final" ]
+CMD [ "./final" ]
