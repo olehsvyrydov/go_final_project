@@ -19,6 +19,10 @@ func main() {
 
 	fmt.Println("Application running with port", port)
 
-	ListenApi(port)
+	err := ListenApi(port)
+
+	if err != nil {
+		fmt.Println(err)
+	}
 
 }

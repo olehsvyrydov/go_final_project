@@ -132,12 +132,13 @@ func postTaskHandler(res http.ResponseWriter, req *http.Request) {
 	}
 	storeService := GetStoreService()
 	if storeService == nil {
-		sendError(res, "cannot get instance of store service", http.StatusInternalServerError)
+		fmt.Println("Delete task handler. Cannot get instance of store service:")
+		sendError(res, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	id, err := storeService.AddTask(nextDate, task.Title, task.Comment, task.Repeat)
 	if err != nil {
-		sendError(res, err.Error(), http.StatusInternalServerError)
+		sendError(res, err.Error(), http.StatusBadRequest)
 		return
 	}
 	sendOk(res, map[string]any{"id": id})
@@ -151,12 +152,13 @@ func getTaskHandler(res http.ResponseWriter, req *http.Request) {
 	}
 	storeService := GetStoreService()
 	if storeService == nil {
-		sendError(res, "cannot get instance of store service", http.StatusInternalServerError)
+		fmt.Println("Delete task handler. Cannot get instance of store service:")
+		sendError(res, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	task, err := storeService.GetTaskById(id)
 	if err != nil {
-		sendError(res, err.Error(), http.StatusInternalServerError)
+		sendError(res, err.Error(), http.StatusBadRequest)
 		return
 	}
 	if task == nil {
@@ -196,14 +198,16 @@ func putTaskHandler(res http.ResponseWriter, req *http.Request) {
 
 	storeService := GetStoreService()
 	if storeService == nil {
-		sendError(res, "cannot get instance of store service", http.StatusInternalServerError)
+		fmt.Println("Delete task handler. Cannot get instance of store service:")
+		sendError(res, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	task.Date = nextDate
 	err = storeService.UpdateTask(&task)
 	if err != nil {
-		sendError(res, err.Error(), http.StatusInternalServerError)
+		fmt.Println("Store service. UpdateTask returns error:", err.Error())
+		sendError(res, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	sendOk(res, Task{})
@@ -217,7 +221,8 @@ func deleteTaskHandler(res http.ResponseWriter, req *http.Request) {
 	}
 	storService := GetStoreService()
 	if storService == nil {
-		sendError(res, "cannot get instance of store service", http.StatusInternalServerError)
+		fmt.Println("Delete task handler. Cannot get instance of store service:")
+		sendError(res, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	err := storService.DeleteTask(id)
@@ -237,7 +242,8 @@ func doneTaskHandler(res http.ResponseWriter, req *http.Request) {
 		}
 		storeService := GetStoreService()
 		if storeService == nil {
-			sendError(res, "cannot get instance of store service", http.StatusInternalServerError)
+			fmt.Println("Done tasks handler. Cannot get instance of store service:")
+			sendError(res, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 		err := storeService.RescheduleTask(id)
@@ -254,12 +260,14 @@ func handleTasks(res http.ResponseWriter, req *http.Request) {
 		search := req.FormValue("search")
 		storeService := GetStoreService()
 		if storeService == nil {
-			sendError(res, "cannot get instance of store service", http.StatusInternalServerError)
+			fmt.Println("Handle tasks. Cannot get instance of store service:")
+			sendError(res, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 		tasks, err := storeService.GetTasks(search, Limit)
 		if err != nil {
-			sendError(res, err.Error(), http.StatusInternalServerError)
+			fmt.Println("Service store. Get tasks returns error:", err.Error())
+			sendError(res, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 		if tasks == nil || len(*tasks) == 0 {
@@ -270,7 +278,7 @@ func handleTasks(res http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func ListenApi(port string) {
+func ListenApi(port string) error {
 	webDir := "./web"
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.Dir(webDir)))
@@ -278,11 +286,11 @@ func ListenApi(port string) {
 	mux.HandleFunc("/api/task", handleTask)
 	mux.HandleFunc("/api/tasks", handleTasks)
 	mux.HandleFunc("/api/task/done", doneTaskHandler)
-	fmt.Println("Start listening")
 	err := http.ListenAndServe(fmt.Sprintf(":%s", port), mux)
 	if err != nil {
-		panic(err)
+		return err
 	}
+	return nil
 }
 
 func sendError(w http.ResponseWriter, message string, status int) {
@@ -296,7 +304,8 @@ func sendOk(w http.ResponseWriter, data interface{}) {
 func sendResponse(w http.ResponseWriter, data interface{}, status int) {
 	resp, err := json.Marshal(data)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		fmt.Println("Service store. Json serialiser error:", err.Error())
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")

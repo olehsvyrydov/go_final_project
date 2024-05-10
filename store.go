@@ -180,8 +180,7 @@ func (s *Store) SearchByDate(date string, limit int) (*[]Task, error) {
 	tasks := []Task{}
 	err := s.db.Select(&tasks, "SELECT * FROM scheduler WHERE date = $1 LIMIT $2", date, limit)
 	if err != nil {
-		fmt.Println("Tasks by date error:", err.Error())
-		return nil, err
+		return nil, fmt.Errorf("tasks by date error: %s", err.Error())
 	}
 
 	return &tasks, nil
@@ -192,8 +191,7 @@ func (s *Store) SearchByString(search string, limit int) (*[]Task, error) {
 	err := s.db.Select(&tasks, "SELECT * FROM scheduler WHERE title LIKE :search OR comment LIKE '$1' ORDER BY date LIMIT $2",
 		"%"+search+"%", limit)
 	if err != nil {
-		fmt.Println("Tasks by string error:", err.Error())
-		return nil, err
+		return nil, fmt.Errorf("tasks by string error: %s", err.Error())
 	}
 
 	return &tasks, nil
