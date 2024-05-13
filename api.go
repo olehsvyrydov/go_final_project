@@ -1,0 +1,314 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"time"
+)
+
+const (
+	Limit = 50
+)
+
+type Task struct {
+	Id      string `json:"id,omitempty"`
+	Date    string `json:"date,omitempty"`
+	Title   string `json:"title"`
+	Comment string `json:"comment,omitempty"`
+	Repeat  string `json:"repeat,omitempty"`
+}
+
+type Empty struct{}
+
+func handleNextDate(res http.ResponseWriter, req *http.Request) {
+	if req.Method == http.MethodGet {
+		now := req.FormValue("now")
+		if now == "" {
+			sendError(res, "required parameter absent: 'now'", http.StatusBadRequest)
+			return
+		}
+
+		date := req.FormValue("date")
+		if date == "" {
+			date = now
+		}
+
+		repeat := req.FormValue("repeat")
+		if repeat == "" {
+			sendError(res, "required parameter absent: 'repeat'", http.StatusBadRequest)
+			return
+		}
+
+		nowDate, err := time.Parse(DateScheduleFormat, now)
+		if err != nil {
+			sendError(res, err.Error(), http.StatusBadRequest)
+		}
+
+		nextDate, err := NextDate(nowDate, date, repeat)
+		if err != nil {
+			sendError(res, err.Error(), http.StatusBadRequest)
+			return
+		}
+		fmt.Fprint(res, nextDate)
+	}
+
+}
+
+func handleTask(res http.ResponseWriter, req *http.Request) {
+	// add tasks
+	if req.Method == http.MethodPost {
+		postTaskHandler(res, req)
+	}
+
+	// get tasks
+	if req.Method == http.MethodGet {
+		getTaskHandler(res, req)
+	}
+
+	// edit tasks
+	if req.Method == http.MethodPut {
+		putTaskHandler(res, req)
+	}
+
+	// delete tasks
+	if req.Method == http.MethodDelete {
+		deleteTaskHandler(res, req)
+	}
+
+}
+
+func postTaskHandler(res http.ResponseWriter, req *http.Request) {
+	var task Task
+	var buf bytes.Buffer
+	var nextDate string
+	var err error
+
+	_, err = buf.ReadFrom(req.Body)
+	if err != nil {
+		sendError(res, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err = json.Unmarshal(buf.Bytes(), &task); err != nil {
+		sendError(res, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if task.Title == "" {
+		sendError(res, "task title must be specified", http.StatusBadRequest)
+		return
+	}
+
+	today := TodayDate(time.Now())
+	todayStr := today.Format(DateScheduleFormat)
+
+	if task.Date == "" {
+		nextDate = todayStr
+	} else {
+		taskDate, err := time.Parse(DateScheduleFormat, task.Date)
+		if err != nil {
+			sendError(res, "wrong format for date", http.StatusBadRequest)
+			return
+		}
+		if task.Repeat != "" {
+			if taskDate.Before(today) {
+				nextDate, err = NextDate(today, task.Date, task.Repeat)
+				if err != nil {
+					sendError(res, "wrong format for date", http.StatusBadRequest)
+					return
+				}
+			} else {
+				nextDate = task.Date
+			}
+		} else {
+			if taskDate.Before(today) {
+				nextDate = todayStr
+			} else {
+				nextDate = task.Date
+			}
+		}
+	}
+	storeService := GetStoreService()
+	if storeService == nil {
+		fmt.Println("Delete task handler. Cannot get instance of store service:")
+		sendError(res, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	id, err := storeService.AddTask(nextDate, task.Title, task.Comment, task.Repeat)
+	if err != nil {
+		sendError(res, err.Error(), http.StatusBadRequest)
+		return
+	}
+	sendOk(res, map[string]any{"id": id})
+}
+
+func getTaskHandler(res http.ResponseWriter, req *http.Request) {
+	id := req.FormValue("id")
+	if id == "" {
+		sendError(res, "required parameter id must be specified", http.StatusBadRequest)
+		return
+	}
+	storeService := GetStoreService()
+	if storeService == nil {
+		fmt.Println("Delete task handler. Cannot get instance of store service:")
+		sendError(res, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	task, err := storeService.GetTaskById(id)
+	if err != nil {
+		sendError(res, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if task == nil {
+		sendOk(res, Task{})
+		return
+	}
+	sendOk(res, task)
+}
+
+func putTaskHandler(res http.ResponseWriter, req *http.Request) {
+	var task Task
+	var buf bytes.Buffer
+
+	_, err := buf.ReadFrom(req.Body)
+	if err != nil {
+		sendError(res, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err = json.Unmarshal(buf.Bytes(), &task); err != nil {
+		sendError(res, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if task.Title == "" {
+		sendError(res, "task title must be specified", http.StatusBadRequest)
+		return
+	}
+
+	today := TodayDate(time.Now())
+
+	nextDate, err := NextDate(today, task.Date, task.Repeat)
+	if err != nil {
+		sendError(res, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	storeService := GetStoreService()
+	if storeService == nil {
+		fmt.Println("Delete task handler. Cannot get instance of store service:")
+		sendError(res, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	task.Date = nextDate
+	err = storeService.UpdateTask(&task)
+	if err != nil {
+		fmt.Println("Store service. UpdateTask returns error:", err.Error())
+		sendError(res, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	sendOk(res, Task{})
+}
+
+func deleteTaskHandler(res http.ResponseWriter, req *http.Request) {
+	id := req.FormValue("id")
+	if id == "" {
+		sendError(res, "parameter 'id' must be specified", http.StatusBadRequest)
+		return
+	}
+	storService := GetStoreService()
+	if storService == nil {
+		fmt.Println("Delete task handler. Cannot get instance of store service:")
+		sendError(res, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	err := storService.DeleteTask(id)
+	if err != nil {
+		sendError(res, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	sendOk(res, Empty{})
+}
+
+func doneTaskHandler(res http.ResponseWriter, req *http.Request) {
+	if req.Method == http.MethodPost {
+		id := req.FormValue("id")
+		if id == "" {
+			sendError(res, "parameter 'id' must be specified", http.StatusBadRequest)
+			return
+		}
+		storeService := GetStoreService()
+		if storeService == nil {
+			fmt.Println("Done tasks handler. Cannot get instance of store service:")
+			sendError(res, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		err := storeService.RescheduleTask(id)
+		if err != nil {
+			sendError(res, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		sendOk(res, Empty{})
+	}
+}
+
+func handleTasks(res http.ResponseWriter, req *http.Request) {
+	if req.Method == http.MethodGet {
+		search := req.FormValue("search")
+		storeService := GetStoreService()
+		if storeService == nil {
+			fmt.Println("Handle tasks. Cannot get instance of store service:")
+			sendError(res, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		tasks, err := storeService.GetTasks(search, Limit)
+		if err != nil {
+			fmt.Println("Service store. Get tasks returns error:", err.Error())
+			sendError(res, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		if tasks == nil || len(*tasks) == 0 {
+			sendOk(res, map[string]any{"tasks": []Task{}})
+			return
+		}
+		sendOk(res, map[string]any{"tasks": tasks})
+	}
+}
+
+func ListenApi(port string) error {
+	webDir := "./web"
+	mux := http.NewServeMux()
+	mux.Handle("/", http.FileServer(http.Dir(webDir)))
+	mux.HandleFunc("/api/nextdate", handleNextDate)
+	mux.HandleFunc("/api/task", handleTask)
+	mux.HandleFunc("/api/tasks", handleTasks)
+	mux.HandleFunc("/api/task/done", doneTaskHandler)
+	err := http.ListenAndServe(fmt.Sprintf(":%s", port), mux)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func sendError(w http.ResponseWriter, message string, status int) {
+	sendResponse(w, map[string]string{"error": message}, status)
+}
+
+func sendOk(w http.ResponseWriter, data interface{}) {
+	sendResponse(w, data, http.StatusOK)
+}
+
+func sendResponse(w http.ResponseWriter, data interface{}, status int) {
+	resp, err := json.Marshal(data)
+	if err != nil {
+		fmt.Println("Service store. Json serialiser error:", err.Error())
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.WriteHeader(status)
+	w.Write(resp)
+}
